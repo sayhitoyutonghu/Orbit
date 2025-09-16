@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Orbit — Minimal Preview</title>
+<style>
+:root{ --bg:#f6f7fb; --text:#0f172a; --accent:#2563eb; --border:#e5e7eb }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font:15px/1.6 ui-sans-serif,system-ui}
+body{display:flex;flex-direction:column}
+header{padding:10px 14px;border-bottom:1px solid var(--border);background:#fff}
+main#board{position:relative;flex:1;overflow:hidden;cursor:grab}
+main#board.dragging{cursor:grabbing}
+#universe{position:absolute;inset:0;transform:translate3d(0,0,0);will-change:transform}
+#lines{position:absolute;inset:0;z-index:0}
+#lines line{stroke:#94a3b8;stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linecap:round}
+#lines line.strong{stroke:#475569;stroke-width:2.2}
+.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:120px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;z-index:2}
+.ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:1px dashed var(--border);border-radius:50%;z-index:1}
+.r1{width:360px;height:360px}
+.r2{width:600px;height:600px}
+.node{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:84px;height:84px;border-radius:50%;background:#fff;border:2px solid var(--accent);box-shadow:0 6px 16px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;font-size:.86rem;user-select:none;cursor:pointer;z-index:2}
+.node.company{border-style:dashed;border-color:#6ea8ff}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.32);display:none;z-index:9}
+.popup{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);display:none;z-index:10;background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 12px 30px rgba(15,23,42,.18);max-width:340px}
+.popup h2{margin-bottom:6px;font-size:1.05rem}
+.popup .sub{color:#64748b;font-size:.92rem}
+.actions{margin-top:10px;display:flex;gap:8px;justify-content:flex-end}
+.btn{padding:8px 10px;border:1px solid var(--border);background:#fff;border-radius:10px;cursor:pointer}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+</style>
+</head>
+<body>
+<header><strong>Orbit · Minimal</strong> — Me + Morgan + COLLINS</header>
+<main id="board">
+  <div id="universe">
+    <svg id="lines" width="100%" height="100%"></svg>
+    <div id="me" class="center" data-name="You" data-role="Center">Me</div>
+    <div class="ring r1" aria-hidden="true"></div>
+    <div class="ring r2" aria-hidden="true"></div>
+    <div id="morgan" class="node person" data-name="Morgan Light" data-role="Design @ COLLINS">Morgan<br>Light</div>
+    <div id="collins" class="node company" data-name="COLLINS" data-role="Brand studio" data-link="https://www.wearecollins.com/">COLLINS</div>
+  </div>
+</main>
+<footer style="text-align:center;padding:10px;color:#64748b">Drag to pan · Click nodes for details</footer>
+<div id="overlay" class="overlay"></div>
+<div id="popup" class="popup" role="dialog" aria-modal="true" aria-label="Details">
+  <h2 id="pName">—</h2>
+  <div id="pSub" class="sub">—</div>
+  <div class="actions">
+    <a id="pLink" class="btn primary" style="display:none" target="_blank" rel="noopener">Open link</a>
+    <button id="pClose" class="btn" type="button">Close</button>
+  </div>
+</div>
+<script>
+// Config
+const radii={r1:190,r2:320}; // keep nodes slightly off rings visually
+const pos={contact:0, company:Math.PI/3}; // 0° and 60°
+
+// Helpers
+const board=document.getElementById('board');
+const uni=document.getElementById('universe');
+const svg=document.getElementById('lines');
+function place(el,r,theta){const x=Math.cos(theta)*r,y=Math.sin(theta)*r;el.style.transform=`translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;}
+function centerXY(el,rel){const a=el.getBoundingClientRect(),b=rel.getBoundingClientRect();return {x:a.left-b.left+a.width/2,y:a.top-b.top+a.height/2};}
+function drawLine(x1,y1,x2,y2,cls=''){const l=document.createElementNS('http://www.w3.org/2000/svg','line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);if(cls)l.setAttribute('class',cls);svg.appendChild(l);} 
+
+// Layout & lines
+function layout(){place(document.getElementById('morgan'),radii.r1,pos.contact);place(document.getElementById('collins'),radii.r2,pos.company);} 
+function draw(){svg.innerHTML='';const me=centerXY(document.getElementById('me'),uni);const c=centerXY(document.getElementById('morgan'),uni);const co=centerXY(document.getElementById('collins'),uni);drawLine(me.x,me.y,c.x,c.y,'strong');drawLine(me.x,me.y,co.x,co.y,'strong');drawLine(c.x,c.y,co.x,co.y);} 
+
+// Popup
+const overlay=document.getElementById('overlay');
+const popup=document.getElementById('popup');
+const pName=document.getElementById('pName');
+const pSub=document.getElementById('pSub');
+const pLink=document.getElementById('pLink');
+const pClose=document.getElementById('pClose');
+function openPopup(el){pName.textContent=el.dataset.name||el.textContent.trim();pSub.textContent=el.dataset.role||'';const link=el.dataset.link;if(link){pLink.href=link;pLink.style.display='inline-flex';}else{pLink.style.display='none';}overlay.style.display='block';popup.style.display='block';}
+function closePopup(){overlay.style.display='none';popup.style.display='none';}
+['me','morgan','collins'].forEach(id=>document.getElementById(id).addEventListener('click',e=>openPopup(e.currentTarget)));
+overlay.addEventListener('click',closePopup);pClose.addEventListener('click',closePopup);document.addEventListener('keydown',e=>{if(e.key==='Escape')closePopup();});
+
+// Pan
+let dragging=false,startX=0,startY=0,tx=0,ty=0;
+board.addEventListener('mousedown',e=>{if(e.button!==0)return;dragging=true;startX=e.clientX;startY=e.clientY;board.classList.add('dragging')});
+window.addEventListener('mousemove',e=>{if(!dragging)return;const dx=e.clientX-startX,dy=e.clientY-startY;uni.style.transform=`translate3d(${tx+dx}px, ${ty+dy}px, 0)`});
+window.addEventListener('mouseup',()=>{if(!dragging)return;dragging=false;board.classList.remove('dragging');const m=/translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\)/.exec(uni.style.transform);if(m){tx=parseFloat(m[1]);ty=parseFloat(m[2]);}});
+
+function init(){layout();draw();}
+window.addEventListener('load',init);window.addEventListener('resize',()=>{layout();draw();});
+</script>
+</body>
+</html>
