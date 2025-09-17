@@ -24,6 +24,9 @@
                 <h2>Add person</h2>
                 <label>Name<br><input id="person-name" required></label>
                 <label>Company<br><input id="person-company" required></label>
+                    <label>Company URL<br><input id="person-company-url" placeholder="https://"></label>
+                    <label>Address<br><input id="person-company-address" placeholder="Street, City"></label>
+                    <label>Notes<br><textarea id="person-notes" rows="3" placeholder="Short notes or details"></textarea></label>
                 <button type="submit">Add</button>
             </form>
 
@@ -33,8 +36,24 @@
                 <div><span class="dot person"></span> Person</div>
                 <div><span class="dot company"></span> Company</div>
             </section>
+            <!-- Edit panel: shows when a node is selected -->
+            <div id="edit-node-panel" class="panel hidden">
+                <h2>Edit node</h2>
+                <label>Name<br><input id="edit-name"></label>
+                <label id="edit-company-label">Company<br><input id="edit-company"></label>
+                <label>Company URL<br><input id="edit-url" placeholder="https://"></label>
+                <label>Address<br><input id="edit-address" placeholder="Street, City"></label>
+                <label>Notes<br><textarea id="edit-notes" rows="4"></textarea></label>
+                <div class="panel-actions">
+                    <button id="save-node">Save</button>
+                    <button id="delete-node">Delete</button>
+                    <button id="close-edit" type="button">Close</button>
+                </div>
+            </div>
         </aside>
     </main>
+
+    <div id="tooltip" class="tooltip hidden" role="status" aria-hidden="true"></div>
 
     <footer>
         <small>Interactive network visualization — local only</small>
