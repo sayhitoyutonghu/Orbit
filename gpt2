@@ -1,0 +1,247 @@
+<script>
+  // ====== 可调参数（视觉/布局） ======
+  const radii = { r1: 260, r2: 460 };     // r1: 联系人环；r2: 公司环（可再放大/缩小）
+  const MIN_SEP_DEG = 16;                 // 同一环上相邻节点的最小角度间隔（度）
+  const CLUSTER_SPREAD_DEG = 40;          // 公司簇的扇区宽度（度）：同公司联系人在这个扇区里分布
+  const OUTER_OFFSET_DEG = 10;            // 外环公司与内环联系人错位的微小偏移，减少同角度重叠
+
+  // ====== 数据（从 1 组开始，后续直接追加） ======
+  const companies = [
+    { id:'collins',  name:'COLLINS',     link:'https://www.wearecollins.com/' },
+    // 以后在这里追加更多公司：{ id:'huge', name:'Huge', link:'...' }, ...
+  ];
+  const contacts = [
+    { id:'morgan',   name:'Morgan Light', role:'Design @ COLLINS', company:'collins' },
+    // 以后在这里追加更多联系人：{ id:'roger', name:'Roger Young', role:'Motion @ Huge', company:'huge' }, ...
+    // 如果某人暂时没有公司关系，可不填 company 字段
+  ];
+
+  // ====== DOM 句柄 ======
+  const board = document.getElementById('board');
+  const uni   = document.getElementById('universe');
+  const svg   = document.getElementById('lines');
+
+  // ====== 工具函数 ======
+  const deg2rad = d => d * Math.PI / 180;
+  function placePolar(el, r, theta) {
+    const x = Math.cos(theta) * r;
+    const y = Math.sin(theta) * r;
+    el.style.left = '50%';
+    el.style.top  = '50%';
+    el.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+  }
+  function centerXY(el, rel) {
+    const a = el.getBoundingClientRect();
+    const b = rel.getBoundingClientRect();
+    return { x: a.left - b.left + a.width/2, y: a.top - b.top + a.height/2 };
+  }
+  function mkLine(x1,y1,x2,y2, cls='') {
+    const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+    l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+    if (cls) l.setAttribute('class', cls);
+    svg.appendChild(l);
+  }
+  function ensureMinSeparation(anglesDeg, minSepDeg) {
+    // 简单的环上防重叠：排序后多次扫描，递增推动过近的点
+    const n = anglesDeg.length;
+    if (n <= 1) return anglesDeg;
+    anglesDeg.sort((a,b)=>a-b);
+    let changed = true, loops = 0;
+    while (changed && loops < 8) {
+      changed = false; loops++;
+      for (let i=0; i<n; i++) {
+        const a = anglesDeg[i];
+        const b = anglesDeg[(i+1)%n];
+        let gap = ( (b - a + 360) % 360 );
+        if (gap < minSepDeg) {
+          const push = (minSepDeg - gap) / 2;
+          anglesDeg[i] = (a - push + 360) % 360;
+          anglesDeg[(i+1)%n] = (b + push) % 360;
+          changed = true;
+        }
+      }
+    }
+    anglesDeg.sort((a,b)=>a-b);
+    return anglesDeg;
+  }
+
+  // ====== 节点创建 ======
+  function ensureNode(id, label, role='', link='') {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = id;
+      el.className = 'node';
+      el.innerHTML = label.replace(/\s+/g,'<br>');
+      uni.appendChild(el);
+    }
+    el.dataset.name = label;
+    if (role) el.dataset.role = role; else delete el.dataset.role;
+    if (link) el.dataset.link = link; else delete el.dataset.link;
+    el.onclick = () => openPopup(el);
+    return el;
+  }
+  function ensureCompanyNode(c) {
+    const el = ensureNode(c.id, c.name, '', c.link);
+    el.classList.add('company');
+    return el;
+  }
+  function ensureContactNode(p) {
+    const el = ensureNode(p.id, p.name, p.role || '', '');
+    el.classList.add('person');
+    return el;
+  }
+
+  // ====== 智能分布（角度分配）======
+  function computeCompanyAngles() {
+    // 公司均匀分布一圈（也可按联系人数加权，自行扩展）
+    const N = companies.length || 1;
+    const base = 0; // 起始角度（度）
+    const step = 360 / N;
+    const angles = {};
+    companies.forEach((c,i)=> {
+      angles[c.id] = (base + i*step + OUTER_OFFSET_DEG) % 360;
+    });
+    return angles; // { companyId: angleDeg }
+  }
+
+  function computeContactAngles(companyAngles) {
+    // 1) 先按公司把联系人分组
+    const byCo = new Map();
+    contacts.forEach(p=>{
+      const key = p.company || '__unlinked__';
+      if(!byCo.has(key)) byCo.set(key, []);
+      byCo.get(key).push(p);
+    });
+
+    const result = {};
+
+    // 2) 对于有公司关系的联系人：在对应公司的扇区内分布
+    for (const [coId, list] of byCo.entries()) {
+      if (coId === '__unlinked__') continue;
+      const centerDeg = companyAngles[coId] ?? 0;
+      const half = CLUSTER_SPREAD_DEG / 2;
+      if (list.length === 1) {
+        result[list[0].id] = centerDeg; // 只有一个就放正中
+      } else {
+        // 在 [center-half, center+half] 区间内均匀铺开
+        for (let i=0; i<list.length; i++) {
+          const t = list.length === 1 ? 0.5 : (i/(list.length-1)); // 0..1
+          result[list[i].id] = (centerDeg - half + t*CLUSTER_SPREAD_DEG + 360) % 360;
+        }
+      }
+    }
+
+    // 3) 没公司关系的联系人：把剩余角度均匀填充（黄金角避免规律重叠）
+    const unlinked = byCo.get('__unlinked__') || [];
+    if (unlinked.length > 0) {
+      const golden = 137.508; // 黄金角
+      let start = 0;
+      for (let i=0; i<unlinked.length; i++) {
+        result[unlinked[i].id] = (start + i*golden) % 360;
+      }
+    }
+
+    // 4) 最小间距处理（只对联系人角度整体做一遍）
+    const allDeg = Object.values(result);
+    const fixed = ensureMinSeparation(allDeg, MIN_SEP_DEG);
+    // 写回
+    let idx = 0;
+    for (const id of Object.keys(result)) {
+      result[id] = fixed[idx++];
+    }
+    return result; // { contactId: angleDeg }
+  }
+
+  // ====== 布局与连线 ======
+  function layout(angles) {
+    // 公司
+    companies.forEach(c=>{
+      const el = ensureCompanyNode(c);
+      placePolar(el, radii.r2, deg2rad(angles.company[c.id]));
+    });
+    // 联系人
+    contacts.forEach(p=>{
+      const el = ensureContactNode(p);
+      placePolar(el, radii.r1, deg2rad(angles.contact[p.id]));
+    });
+  }
+
+  function draw() {
+    svg.innerHTML = '';
+    const me = centerXY(document.getElementById('me'), uni);
+
+    // 中心 → 所有节点
+    [...contacts, ...companies].forEach(d=>{
+      const el = document.getElementById(d.id);
+      if(!el) return;
+      const pt = centerXY(el, uni);
+      mkLine(me.x, me.y, pt.x, pt.y, 'strong');
+    });
+
+    // 联系人 → 其公司
+    contacts.forEach(p=>{
+      if(!p.company) return;
+      const a = document.getElementById(p.id);
+      const b = document.getElementById(p.company);
+      if(!a || !b) return;
+      const pa = centerXY(a, uni);
+      const pb = centerXY(b, uni);
+      mkLine(pa.x, pa.y, pb.x, pb.y);
+    });
+  }
+
+  // ====== 弹窗 ======
+  const overlay = document.getElementById('overlay');
+  const popup   = document.getElementById('popup');
+  const pName   = document.getElementById('pName');
+  const pSub    = document.getElementById('pSub');
+  const pLink   = document.getElementById('pLink');
+  const pClose  = document.getElementById('pClose');
+
+  function openPopup(el) {
+    pName.textContent = el.dataset.name || el.textContent.trim();
+    pSub.textContent  = el.dataset.role || '';
+    const link = el.dataset.link;
+    if (link) { pLink.href = link; pLink.style.display='inline-flex'; }
+    else      { pLink.style.display='none'; }
+    overlay.style.display='block';
+    popup.style.display  ='block';
+  }
+  function closePopup(){ overlay.style.display='none'; popup.style.display='none'; }
+  overlay.addEventListener('click', closePopup);
+  pClose .addEventListener('click', closePopup);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
+
+  // ====== 平移（GPU transform） ======
+  let dragging=false, startX=0, startY=0, tx=0, ty=0;
+  board.addEventListener('mousedown', e=>{
+    if(e.button!==0) return;
+    dragging=true; startX=e.clientX; startY=e.clientY; board.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!dragging) return;
+    const dx=e.clientX-startX, dy=e.clientY-startY;
+    uni.style.transform = `translate3d(${tx+dx}px, ${ty+dy}px, 0)`;
+  });
+  window.addEventListener('mouseup', ()=>{
+    if(!dragging) return; dragging=false; board.classList.remove('dragging');
+    const m=/translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\)/.exec(uni.style.transform);
+    if(m){ tx=parseFloat(m[1]); ty=parseFloat(m[2]); }
+  });
+
+  // ====== 初始化 ======
+  function init() {
+    // 计算角度
+    const companyAngles = computeCompanyAngles();       // { companyId: deg }
+    const contactAngles = computeContactAngles(companyAngles); // { contactId: deg }
+    const angles = { company: companyAngles, contact: contactAngles };
+
+    // 布局 & 连线
+    layout(angles);
+    draw();
+  }
+  window.addEventListener('load', init);
+  window.addEventListener('resize', ()=>{ init(); }); // 简单起见，重算一次
+</script>
