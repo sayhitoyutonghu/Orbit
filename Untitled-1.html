@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Network Manager - You in the Center</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <script src="script.js" defer></script>
+    <!-- No external dependencies: lightweight SVG + JS approach -->
+</head>
+<body>
+    <header>
+        <h1>Network Management</h1>
+        <p>Drag nodes to rearrange. Click a person to highlight their company. Use the form to add people.</p>
+    </header>
+
+    <main>
+        <section id="canvas-wrap">
+            <svg id="network-canvas" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+        </section>
+
+        <aside id="controls">
+            <form id="add-person-form">
+                <h2>Add person</h2>
+                <label>Name<br><input id="person-name" required></label>
+                <label>Company<br><input id="person-company" required></label>
+                <button type="submit">Add</button>
+            </form>
+
+            <section id="legend">
+                <h3>Legend</h3>
+                <div><span class="dot me"></span> You</div>
+                <div><span class="dot person"></span> Person</div>
+                <div><span class="dot company"></span> Company</div>
+            </section>
+        </aside>
+    </main>
+
+    <footer>
+        <small>Interactive network visualization — local only</small>
+    </footer>
+</body>
+</html>
